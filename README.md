@@ -118,39 +118,90 @@ OCR processing failed for `MySketch.note`.
 
 ## Installation
 
-### Prerequisites
+### System requirements
 
-| Dependency   | macOS                           | Linux                           |
-|--------------|---------------------------------|---------------------------------|
-| Tesseract    | `brew install tesseract`        | `apt-get install tesseract-ocr` |
-| Poppler      | `brew install poppler`          | `apt-get install poppler-utils` |
-| Python 3.11+ | [python.org](https://www.python.org/downloads/) | system package or pyenv |
+| Dependency   | Minimum version | Purpose |
+|--------------|-----------------|---------|
+| Python       | 3.11            | Runtime |
+| Tesseract    | 4.x             | Local OCR engine |
+| Poppler      | any recent      | PDF/image rendering via `pdf2image` |
+| Git          | any             | Optional vault auto-commit |
 
-### Quick install
+---
 
-**Automated** (recommended) — installs system deps, creates `.venv`, copies config:
+### Step 1 — Clone the repository
 
 ```bash
 git clone https://github.com/your-user/supernote-to-obsidian.git
 cd supernote-to-obsidian
+```
+
+---
+
+### Step 2 — Install system dependencies
+
+**macOS** (Homebrew required — install from [brew.sh](https://brew.sh) if needed):
+
+```bash
+brew install tesseract poppler
+```
+
+**Linux (Debian/Ubuntu):**
+
+```bash
+sudo apt-get update
+sudo apt-get install -y tesseract-ocr poppler-utils
+```
+
+Verify Tesseract is on PATH:
+
+```bash
+tesseract --version
+# Expected: tesseract 4.x.x or 5.x.x
+```
+
+---
+
+### Step 3 — Create the Python virtual environment
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+---
+
+### Step 4 — Install the package
+
+```bash
+pip install --upgrade pip
+pip install -e ".[dev]"
+```
+
+The `[dev]` extra includes `pytest`, `ruff`, and `mypy`. For a production-only install omit it:
+
+```bash
+pip install -e "."
+```
+
+Verify the CLI installed correctly:
+
+```bash
+supernote-sync --help
+# Should print: init, once, watch, pull, status commands
+```
+
+---
+
+### Step 5 — Automated alternative
+
+Steps 2–4 above are also handled by the setup script, which auto-detects macOS vs Linux:
+
+```bash
 bash scripts/setup.sh
 ```
 
-**Manual:**
-
-```bash
-git clone https://github.com/your-user/supernote-to-obsidian.git
-cd supernote-to-obsidian
-python3 -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"
-cp config.yaml.example config.yaml
-```
-
-Then run the interactive setup wizard to generate your `config.yaml`:
-
-```bash
-supernote-sync init
-```
+---
 
 ### supernote-tool (optional)
 
@@ -173,36 +224,137 @@ python scripts/test_real_device.py path/to/sample.note
 
 ## Configuration
 
-All settings live in `config.yaml`. See [`config.yaml.example`](config.yaml.example) for the
-fully annotated template. The table below lists every top-level key:
+### Step 6 — Generate config.yaml
 
-| Section                | Key                                   | Description                                             |
-|------------------------|---------------------------------------|---------------------------------------------------------|
-| `supernote`            | `sync_folder`                         | Local directory that holds `.note` files                |
-| `supernote.wifi`       | `enabled`, `host`, `port`, `poll_interval_seconds` | Wi-Fi pull settings                      |
-| `ocr`                  | `engine`                              | `"tesseract"` or `"google_vision"`                      |
-| `ocr`                  | `low_confidence_threshold`            | Pages below this confidence (0–1) get a warning comment |
-| `ocr.tesseract`        | `binary_path`, `lang`                 | Tesseract binary location and language string           |
-| `ocr.google_vision`    | `credentials_path`                    | Path to Google service-account JSON key file            |
-| `obsidian`             | `vault_path`, `notes_subfolder`, `attachments_subfolder` | Vault layout                       |
-| `obsidian.frontmatter` | `default_tags`, `extra_fields`        | YAML frontmatter fields added to every note             |
-| `obsidian.git_sync`    | `enabled`, `commit_message`, `remote`, `branch` | Auto commit and push after each sync          |
-| `processing`           | `deduplicate`, `state_dir`, `render_dpi`, `output_filename_pattern` | Processing options  |
-| `logging`              | `level`, `log_dir`, `max_log_files`   | Log level and rotating file settings                    |
+The `init` command is the fastest way to create a working config:
 
-**Minimal working config:**
+```bash
+supernote-sync init
+```
+
+It prompts for four values:
+
+| Prompt | Example input | What it sets |
+|--------|---------------|--------------|
+| Obsidian vault path | `~/Documents/MyVault` | `obsidian.vault_path` |
+| Local sync folder | `~/supernote-sync` | `supernote.sync_folder` |
+| OCR engine | `tesseract` | `ocr.engine` |
+| Supernote IP address | `192.168.1.100` or blank | `supernote.wifi.host` + `enabled` |
+
+Or copy the annotated example manually and edit it:
+
+```bash
+cp config.yaml.example config.yaml
+```
+
+---
+
+### Step 7 — Key configuration values
+
+Open `config.yaml` and set at minimum:
 
 ```yaml
 supernote:
-  sync_folder: ~/supernote-sync
+  sync_folder: ~/supernote-sync      # where .note files land locally
 
 obsidian:
-  vault_path: ~/Documents/MyVault
+  vault_path: ~/Documents/MyVault    # root of your Obsidian vault
 ```
 
-The `output_filename_pattern` key is a Python `strftime` string with one extra placeholder:
-`{note_name}` is replaced with the original `.note` filename stem. For example,
-`"%Y-%m-%d_{note_name}"` produces `2024-06-15_MySketch.md`.
+**Wi-Fi pull** (to pull files directly from the device):
+
+```yaml
+supernote:
+  wifi:
+    enabled: true
+    host: "192.168.1.100"            # device IP — find it in Supernote Settings > Wi-Fi
+    port: 8089
+    poll_interval_seconds: 60
+```
+
+**Google Cloud Vision** (higher accuracy, requires credentials):
+
+```yaml
+ocr:
+  engine: "google_vision"
+  google_vision:
+    credentials_path: ~/secrets/google-vision-key.json
+```
+
+To get a key: Google Cloud Console → APIs & Services → Credentials → Create service account →
+download JSON → enable the Cloud Vision API.
+
+**Git auto-commit** (push vault after every note):
+
+```yaml
+obsidian:
+  git_sync:
+    enabled: true
+    commit_message: "chore: supernote sync {timestamp}"
+    remote: "origin"
+    branch: "main"
+```
+
+Your vault must already be a git repo with a configured remote for this to work.
+
+**Output filename pattern:**
+
+```yaml
+processing:
+  output_filename_pattern: "%Y-%m-%d_{note_name}"
+  # Produces: 2024-06-15_MySketch.md
+```
+
+`{note_name}` is replaced with the original `.note` filename stem. The pattern is a standard
+Python `strftime` format string.
+
+---
+
+### Step 8 — Create required directories
+
+The setup script handles this automatically. If you installed manually:
+
+```bash
+mkdir -p ~/.supernote-sync/logs
+```
+
+---
+
+### Step 9 — First run
+
+```bash
+source .venv/bin/activate
+
+# Process all .note files in sync_folder once
+supernote-sync --config config.yaml once
+
+# Check what was processed
+supernote-sync --config config.yaml status
+
+# Start the live watcher (blocks until Ctrl-C)
+supernote-sync --config config.yaml watch
+```
+
+---
+
+### Configuration reference
+
+All settings live in `config.yaml`. See [`config.yaml.example`](config.yaml.example) for the
+fully annotated template. The table below lists every top-level key:
+
+| Section                | Key                                             | Description                                             |
+|------------------------|-------------------------------------------------|---------------------------------------------------------|
+| `supernote`            | `sync_folder`                                   | Local directory that holds `.note` files                |
+| `supernote.wifi`       | `enabled`, `host`, `port`, `poll_interval_seconds` | Wi-Fi pull settings                                  |
+| `ocr`                  | `engine`                                        | `"tesseract"` or `"google_vision"`                      |
+| `ocr`                  | `low_confidence_threshold`                      | Pages below this confidence (0–1) get a warning comment |
+| `ocr.tesseract`        | `binary_path`, `lang`                           | Tesseract binary location and language string           |
+| `ocr.google_vision`    | `credentials_path`                              | Path to Google service-account JSON key file            |
+| `obsidian`             | `vault_path`, `notes_subfolder`, `attachments_subfolder` | Vault layout                               |
+| `obsidian.frontmatter` | `default_tags`, `extra_fields`                  | YAML frontmatter fields added to every note             |
+| `obsidian.git_sync`    | `enabled`, `commit_message`, `remote`, `branch` | Auto commit and push after each sync                    |
+| `processing`           | `deduplicate`, `state_dir`, `render_dpi`, `output_filename_pattern` | Processing options        |
+| `logging`              | `level`, `log_dir`, `max_log_files`             | Log level and rotating file settings                    |
 
 ---
 
@@ -287,8 +439,12 @@ Run `supernote-sync init` first to create your `config.yaml` before installing t
 
 ### macOS (launchd)
 
-1. Edit `scripts/com.supernote-sync.plist` and replace all `YOUR_USER` placeholders with your
-   macOS username and the correct path to the `supernote-sync` binary in your `.venv`.
+1. Replace all `YOUR_USER` placeholders in the plist with your macOS username:
+
+```bash
+sed -i '' "s/YOUR_USER/$(whoami)/g" scripts/com.supernote-sync.plist
+```
+
 2. Install and load the agent:
 
 ```bash
@@ -296,16 +452,31 @@ cp scripts/com.supernote-sync.plist ~/Library/LaunchAgents/
 launchctl load ~/Library/LaunchAgents/com.supernote-sync.plist
 ```
 
-3. Check status:
+3. Confirm it is running (a non-zero PID in the first column means the process is active):
 
 ```bash
 launchctl list | grep supernote
 ```
 
+4. View logs:
+
+```bash
+tail -f ~/.supernote-sync/logs/supernote-sync.stdout.log
+tail -f ~/.supernote-sync/logs/supernote-sync.stderr.log
+```
+
+5. To stop or unload:
+
+```bash
+launchctl unload ~/Library/LaunchAgents/com.supernote-sync.plist
+```
+
 ### Linux (systemd user unit)
 
-1. Edit `scripts/supernote-sync.service` and verify the `ExecStart` path points to the
-   `supernote-sync` binary inside your `.venv`.
+1. Verify the `ExecStart` path in `scripts/supernote-sync.service` points to the
+   `supernote-sync` binary inside your `.venv`. The `%u` placeholder expands to your username
+   automatically.
+
 2. Install and enable:
 
 ```bash
@@ -315,10 +486,17 @@ systemctl --user daemon-reload
 systemctl --user enable --now supernote-sync
 ```
 
-3. View logs:
+3. Check status and view logs:
 
 ```bash
+systemctl --user status supernote-sync
 journalctl --user -u supernote-sync -f
+```
+
+4. To stop:
+
+```bash
+systemctl --user stop supernote-sync
 ```
 
 ---
