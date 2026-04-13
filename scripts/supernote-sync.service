@@ -1,0 +1,25 @@
+[Unit]
+Description=supernote-to-obsidian file watcher
+Documentation=https://github.com/your-user/supernote-to-obsidian
+After=network.target
+
+[Service]
+Type=simple
+
+# Update the paths below to match your installation
+ExecStart=/home/%u/Documents/GitHub/supernote-to-obsidian/.venv/bin/supernote-sync \
+    --config /home/%u/Documents/GitHub/supernote-to-obsidian/config.yaml \
+    watch
+
+WorkingDirectory=/home/%u/Documents/GitHub/supernote-to-obsidian
+
+# Redirect stdout/stderr to systemd journal (use journalctl -u supernote-sync to view)
+StandardOutput=journal
+StandardError=journal
+
+# Restart on failure with a 10-second back-off
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target

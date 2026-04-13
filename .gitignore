@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+.venv/
+venv/
+env/
+
+# Distribution
+*.tar.gz
+*.whl
+
+# MyPy
+.mypy_cache/
+.dmypy.json
+
+# Pytest / Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# Config with secrets
+config.yaml
+*.env
+
+# Logs
+*.log
+logs/
+
+# State / cache
+processed_hashes.json
+
+# macOS
+.DS_Store
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo

@@ -1,0 +1,102 @@
+# =============================================================================
+# supernote-to-obsidian configuration example
+# Copy this file to config.yaml and adjust values for your setup.
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Supernote device settings
+# ---------------------------------------------------------------------------
+supernote:
+  # Local folder where .note files are stored / downloaded
+  sync_folder: ~/supernote-sync
+
+  wifi:
+    # Enable pulling files over Supernote's built-in Wi-Fi HTTP server
+    enabled: false
+    # IP address of the Supernote device on your local network
+    host: "192.168.1.100"
+    # HTTP port exposed by the Supernote (default: 8089)
+    port: 8089
+    # How often (seconds) to poll the device for new files
+    poll_interval_seconds: 60
+
+# ---------------------------------------------------------------------------
+# OCR settings
+# ---------------------------------------------------------------------------
+ocr:
+  # Which OCR engine to use: "tesseract" | "google_vision"
+  engine: "tesseract"
+
+  tesseract:
+    # Path to the tesseract binary; leave empty to use system PATH
+    binary_path: ""
+    # Tesseract language data to use (e.g. "eng", "eng+fra")
+    lang: "eng"
+
+  google_vision:
+    # Path to a Google Cloud service-account JSON key file
+    credentials_path: ~/secrets/google-vision-key.json
+
+  # Pages with average OCR confidence below this value get the
+  # <!-- OCR_LOW_CONFIDENCE --> warning prepended to their text block.
+  low_confidence_threshold: 0.70
+
+# ---------------------------------------------------------------------------
+# Obsidian vault settings
+# ---------------------------------------------------------------------------
+obsidian:
+  # Absolute (or ~-expanded) path to your Obsidian vault root
+  vault_path: ~/Documents/MyVault
+
+  # Sub-folder inside the vault where converted notes are written
+  notes_subfolder: "Supernote"
+
+  # Sub-folder inside the vault where page images are stored
+  attachments_subfolder: "Supernote/attachments"
+
+  frontmatter:
+    # Tags automatically added to every converted note
+    default_tags:
+      - supernote
+      - handwritten
+
+    # Arbitrary extra key-value pairs merged into frontmatter
+    extra_fields:
+      device: "Supernote Manta"
+
+  git_sync:
+    # Commit and push the vault after every successful note conversion
+    enabled: false
+    commit_message: "chore: supernote sync {timestamp}"
+    remote: "origin"
+    branch: "main"
+
+# ---------------------------------------------------------------------------
+# Processing settings
+# ---------------------------------------------------------------------------
+processing:
+  # Skip files whose MD5 hash is already in the state cache
+  deduplicate: true
+
+  # Directory where the hash cache and other state files are stored
+  state_dir: ~/.supernote-sync
+
+  # DPI used when rasterising .note pages
+  render_dpi: 200
+
+  # strftime-compatible pattern for output filenames.
+  # {note_name} is replaced with the original .note file stem.
+  output_filename_pattern: "%Y-%m-%d_{note_name}"
+
+# ---------------------------------------------------------------------------
+# Logging settings
+# ---------------------------------------------------------------------------
+logging:
+  # Python log level: DEBUG | INFO | WARNING | ERROR | CRITICAL
+  level: "INFO"
+
+  # Directory where rotating log files are written
+  log_dir: ~/.supernote-sync/logs
+
+  # Number of daily log files to retain (older ones are deleted)
+  max_log_files: 7
