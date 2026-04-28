@@ -45,9 +45,8 @@ dev = [
 [project.scripts]
 supernote-sync = "supernote_sync.cli:main"
 
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["supernote_sync*"]
+[tool.setuptools]
+packages = ["supernote_sync"]
 
 [tool.ruff]
 line-length = 100
