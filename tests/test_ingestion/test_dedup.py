@@ -66,3 +66,40 @@ class TestDedupCache:
 
         assert cache.already_processed(file_a) is True
         assert cache.already_processed(file_b) is False
+
+    # ── is_modified ──────────────────────────────────────────────────────────
+
+    def test_is_modified_false_for_new_file(
+        self, state_dir: Path, note_file: Path
+    ) -> None:
+        """is_modified returns False for a file never processed before."""
+        cache = DedupCache(state_dir)
+        assert cache.is_modified(note_file) is False
+
+    def test_is_modified_false_when_unchanged(
+        self, state_dir: Path, note_file: Path
+    ) -> None:
+        """is_modified returns False when the content has not changed."""
+        cache = DedupCache(state_dir)
+        cache.mark_processed(note_file)
+        assert cache.is_modified(note_file) is False
+
+    def test_is_modified_true_after_content_change(
+        self, state_dir: Path, note_file: Path
+    ) -> None:
+        """is_modified returns True after a file's content changes."""
+        cache = DedupCache(state_dir)
+        cache.mark_processed(note_file)
+        note_file.write_bytes(b"re-exported with different bytes")
+        assert cache.is_modified(note_file) is True
+
+    def test_is_modified_and_already_processed_are_mutually_exclusive(
+        self, state_dir: Path, note_file: Path
+    ) -> None:
+        """A file cannot be both already_processed and is_modified."""
+        cache = DedupCache(state_dir)
+        cache.mark_processed(note_file)
+        note_file.write_bytes(b"changed content")
+        # After change: is_modified=True, already_processed=False
+        assert cache.is_modified(note_file) is True
+        assert cache.already_processed(note_file) is False

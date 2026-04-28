@@ -92,6 +92,30 @@ class DedupCache:
             return False
         return self._data[key] == current_hash
 
+    def is_modified(self, path: Path) -> bool:
+        """Return ``True`` if *path* is cached but its content has changed.
+
+        Unlike :meth:`already_processed` (which returns ``False`` for changed
+        files), this method only returns ``True`` when the file was previously
+        processed *and* now has a different MD5 — i.e. it was re-exported.
+        A file that has never been processed returns ``False``.
+
+        Args:
+            path: Path to the ``.note`` file to check.
+
+        Returns:
+            ``True`` when the cached hash differs from the current file hash.
+        """
+        key = str(path)
+        if key not in self._data:
+            return False  # never processed — it's "new", not "modified"
+        try:
+            current_hash = self._md5(path)
+        except OSError as exc:
+            logger.warning("Could not hash %s for modified check: %s", path, exc)
+            return False
+        return self._data[key] != current_hash
+
     def mark_processed(self, path: Path) -> None:
         """Record *path* as successfully processed.
 

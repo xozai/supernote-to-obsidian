@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import sys
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -37,6 +38,63 @@ def _load_cfg(ctx: click.Context) -> dict[str, Any]:
         sys.exit(1)
     setup_logging(cfg)
     return cfg
+
+
+def _parse_date_arg(value: str, param_name: str) -> date:
+    """Parse a ``YYYY-MM-DD`` string into a :class:`datetime.date`.
+
+    Args:
+        value: The raw string value from the CLI.
+        param_name: The option name, used in error messages.
+
+    Returns:
+        A :class:`datetime.date` instance.
+
+    Raises:
+        :exc:`click.BadParameter` when the format is invalid.
+    """
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        raise click.BadParameter(
+            f"Expected YYYY-MM-DD, got '{value}'",
+            param_hint=f"'--{param_name}'",
+        )
+
+
+def _mtime_date(path: Path) -> date:
+    """Return the UTC modification date of *path*."""
+    return datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc).date()
+
+
+def _vault_note_has_tag(note_path: Path, tag: str, notes_dir: Path) -> bool:
+    """Return ``True`` if an existing vault note for *note_path* has *tag*.
+
+    Scans *notes_dir* for Markdown files whose name contains the note stem,
+    then checks their YAML frontmatter for the given tag.
+
+    Args:
+        note_path: The ``.note`` source file.
+        tag: The tag string to look for.
+        notes_dir: Directory in the vault where notes are stored.
+
+    Returns:
+        ``True`` when a matching vault note with the tag is found.
+    """
+    import frontmatter  # noqa: PLC0415
+
+    stem = note_path.stem
+    for md_path in notes_dir.glob(f"*{stem}*.md"):
+        try:
+            post = frontmatter.load(str(md_path))
+            tags: Any = post.get("tags", [])
+            if isinstance(tags, list) and tag in tags:
+                return True
+            if isinstance(tags, str) and tag == tags:
+                return True
+        except Exception:  # noqa: BLE001
+            continue
+    return False
 
 
 @click.group()
@@ -79,21 +137,65 @@ def watch(ctx: click.Context) -> None:
     default=False,
     help="Bypass the dedup cache and overwrite existing notes in the vault.",
 )
+@click.option(
+    "--dry-run",
+    "dry_run",
+    is_flag=True,
+    default=False,
+    help="Print what would be processed without writing any files.",
+)
+@click.option(
+    "--since",
+    "since_date",
+    default=None,
+    metavar="DATE",
+    help="Only include files modified on or after DATE (YYYY-MM-DD).",
+)
+@click.option(
+    "--until",
+    "until_date",
+    default=None,
+    metavar="DATE",
+    help="Only include files modified on or before DATE (YYYY-MM-DD).",
+)
+@click.option(
+    "--tag",
+    "filter_tag",
+    default=None,
+    metavar="TAG",
+    help="Only include files whose vault note already has TAG in frontmatter.",
+)
 @click.pass_context
-def once(ctx: click.Context, path: Path | None, force: bool) -> None:
-    """Process .note files once (either a single file, or all in sync_folder).
+def once(
+    ctx: click.Context,
+    path: Path | None,
+    force: bool,
+    dry_run: bool,
+    since_date: str | None,
+    until_date: str | None,
+    filter_tag: str | None,
+) -> None:
+    """Process .note files once (a file, directory, or the configured sync_folder).
 
     PATH  Optional path to a specific .note file or directory.  If omitted,
           all *.note files in the configured sync_folder are processed.
 
+    \b
+    Filtering flags (combinable):
+      --since / --until  narrow by file modification date
+      --tag              narrow by existing vault-note frontmatter tag
+
     Use --force to reprocess files that have already been converted, overwriting
     the existing note in the vault rather than creating a new dated copy.
+
+    Use --dry-run to preview what would run without touching the vault.
     """
     cfg: dict[str, Any] = _load_cfg(ctx)
     from supernote_sync.pipeline import Pipeline  # noqa: PLC0415
 
     pipeline = Pipeline(cfg)
 
+    # ── Resolve note_files ──────────────────────────────────────────────────
     if path is not None:
         target = Path(path)
         if target.is_dir():
@@ -109,33 +211,169 @@ def once(ctx: click.Context, path: Path | None, force: bool) -> None:
         ).expanduser()
         note_files = sorted(sync_folder.glob("*.note"))
 
+    # ── Date filters ─────────────────────────────────────────────────────────
+    since_dt = _parse_date_arg(since_date, "since") if since_date else None
+    until_dt = _parse_date_arg(until_date, "until") if until_date else None
+
+    if since_dt or until_dt:
+        filtered: list[Path] = []
+        for nf in note_files:
+            nd = _mtime_date(nf)
+            if since_dt and nd < since_dt:
+                continue
+            if until_dt and nd > until_dt:
+                continue
+            filtered.append(nf)
+        note_files = filtered
+
+    # ── Tag filter ───────────────────────────────────────────────────────────
+    if filter_tag:
+        obs_cfg = cfg.get("obsidian", {})
+        vault_path = Path(obs_cfg.get("vault_path", "~/Documents/MyVault")).expanduser()
+        notes_dir = vault_path / obs_cfg.get("notes_subfolder", "Supernote")
+        note_files = [
+            nf for nf in note_files
+            if _vault_note_has_tag(nf, filter_tag, notes_dir)
+        ]
+
     if not note_files:
         console.print("[yellow]No .note files found.[/yellow]")
         return
 
-    n = len(note_files)
-    if force:
-        console.print(f"Processing [bold]{n}[/bold] file(s) [yellow](force)[/yellow] …")
-    else:
-        console.print(f"Processing [bold]{n}[/bold] file(s) …")
+    # ── Dry-run: print table and exit ────────────────────────────────────────
+    if dry_run:
+        from rich.table import Table  # noqa: PLC0415
 
-    ok = 0
-    fail = 0
+        table = Table(show_header=True, header_style="bold")
+        table.add_column("File")
+        table.add_column("Size")
+        table.add_column("Modified")
+        table.add_column("Status")
+
+        for nf in note_files:
+            size_kb = nf.stat().st_size // 1024
+            mtime = _mtime_date(nf).isoformat()
+            if pipeline._dedup_enabled and pipeline._dedup is not None:
+                if pipeline._dedup.already_processed(nf) and not force:
+                    status_label = "[dim]already done[/dim]"
+                elif pipeline._dedup.is_modified(nf):
+                    status_label = "[yellow]modified[/yellow]"
+                else:
+                    status_label = "[green]new[/green]"
+            else:
+                status_label = "[green]pending[/green]"
+            table.add_row(nf.name, f"{size_kb} KB", mtime, status_label)
+
+        console.print(table)
+        n = len(note_files)
+        suffix = " [yellow](force)[/yellow]" if force else ""
+        console.print(f"\n[bold]{n}[/bold] file(s) would be processed.{suffix}")
+        return
+
+    # ── Live run ─────────────────────────────────────────────────────────────
+    n = len(note_files)
+    suffix = " [yellow](force)[/yellow]" if force else ""
+    console.print(f"Processing [bold]{n}[/bold] file(s){suffix} …")
+
+    n_new = n_modified = n_skipped = n_failed = 0
+
     for nf in note_files:
-        result = pipeline.process_file(nf, force=force)
-        if result:
-            ok += 1
-            console.print(f"  [green]✓[/green] {nf.name}")
+        # Classify file before processing for the run summary.
+        if pipeline._dedup_enabled and pipeline._dedup is not None:
+            if pipeline._dedup.already_processed(nf):
+                pre_status = "done"
+            elif pipeline._dedup.is_modified(nf):
+                pre_status = "modified"
+            else:
+                pre_status = "new"
         else:
-            fail += 1
+            pre_status = "new"
+
+        result = pipeline.process_file(nf, force=force)
+
+        if result:
+            if pre_status == "modified":
+                n_modified += 1
+            else:
+                n_new += 1
+            console.print(f"  [green]✓[/green] {nf.name}")
+        elif pre_status == "done" and not force:
+            n_skipped += 1
+            console.print(f"  [dim]─[/dim] {nf.name}")
+        else:
+            n_failed += 1
             console.print(f"  [red]✗[/red] {nf.name}")
 
-    console.print(f"\n[bold]Done:[/bold] {ok} succeeded, {fail} failed/skipped.")
+    # Run summary
+    parts = []
+    if n_new:
+        parts.append(f"{n_new} new")
+    if n_modified:
+        parts.append(f"{n_modified} modified")
+    if n_skipped:
+        parts.append(f"{n_skipped} skipped")
+    if n_failed:
+        parts.append(f"[red]{n_failed} failed[/red]")
+    summary = ", ".join(parts) if parts else "nothing to do"
+    console.print(f"\n[bold]Done:[/bold] {summary}.")
 
 
 @main.command()
 @click.option(
-    "--watch/--no-watch", "watch_mode", default=False, help="Poll continuously for new files."
+    "--interval",
+    default=3600,
+    show_default=True,
+    type=int,
+    help="Seconds between each sync run.",
+)
+@click.pass_context
+def schedule(ctx: click.Context, interval: int) -> None:
+    """Process .note files on a recurring schedule using APScheduler.
+
+    Runs immediately on start, then repeats every INTERVAL seconds.
+    """
+    from apscheduler.schedulers.blocking import BlockingScheduler  # noqa: PLC0415
+
+    from supernote_sync.pipeline import Pipeline  # noqa: PLC0415
+
+    cfg: dict[str, Any] = _load_cfg(ctx)
+    pipeline = Pipeline(cfg)
+    sync_folder = Path(
+        cfg.get("supernote", {}).get("sync_folder", "~/supernote-sync")
+    ).expanduser()
+
+    def _run_sync() -> None:
+        note_files = sorted(sync_folder.glob("*.note"))
+        if not note_files:
+            console.print("[yellow]No .note files found in sync folder.[/yellow]")
+            return
+        ok = fail = 0
+        for nf in note_files:
+            if pipeline.process_file(nf):
+                ok += 1
+            else:
+                fail += 1
+        console.print(f"[bold]Run complete:[/bold] {ok} succeeded, {fail} failed/skipped.")
+
+    scheduler: Any = BlockingScheduler()
+    scheduler.add_job(_run_sync, "interval", seconds=interval)
+    console.print(
+        f"[green]Scheduler started[/green] — running every {interval}s …"
+        "  (Ctrl-C to stop)"
+    )
+    _run_sync()  # immediate first run
+    try:
+        scheduler.start()
+    except (KeyboardInterrupt, SystemExit):
+        console.print("\nScheduler stopped.")
+
+
+@main.command()
+@click.option(
+    "--watch/--no-watch",
+    "watch_mode",
+    default=False,
+    help="Poll continuously for new files.",
 )
 @click.pass_context
 def pull(ctx: click.Context, watch_mode: bool) -> None:
@@ -167,11 +405,14 @@ def pull(ctx: click.Context, watch_mode: bool) -> None:
 
     if watch_mode:
         import time  # noqa: PLC0415
+
         interval = wifi_cfg.get("poll_interval_seconds", 60)
         try:
             while True:
                 count = puller.pull()
-                console.print(f"  Pulled {count} new file(s). Next check in {interval}s …")
+                console.print(
+                    f"  Pulled {count} new file(s). Next check in {interval}s …"
+                )
                 time.sleep(interval)
         except KeyboardInterrupt:
             console.print("\nStopping pull loop.")
@@ -201,11 +442,15 @@ def init(ctx: click.Context) -> None:
 
     vault_path = click.prompt("Obsidian vault path", default="~/Documents/MyVault")
     sync_folder = click.prompt("Local sync folder", default="~/supernote-sync")
-    ocr_engine = click.prompt("OCR engine [tesseract/google_vision]", default="tesseract")
-    wifi_host = click.prompt("Supernote IP address (leave blank to skip WiFi)", default="")
+    ocr_engine = click.prompt(
+        "OCR engine [tesseract/google_vision]", default="tesseract"
+    )
+    wifi_host = click.prompt(
+        "Supernote IP address (leave blank to skip WiFi)", default=""
+    )
 
     if example_path.exists():
-        cfg = load_config(example_path)
+        cfg: dict[str, Any] = load_config(example_path)
     else:
         cfg = {}
 
@@ -213,7 +458,7 @@ def init(ctx: click.Context) -> None:
     cfg.setdefault("supernote", {})["sync_folder"] = sync_folder
     cfg.setdefault("obsidian", {})["vault_path"] = vault_path
     cfg.setdefault("ocr", {})["engine"] = ocr_engine
-    wifi_cfg = cfg["supernote"].setdefault("wifi", {})
+    wifi_cfg: dict[str, Any] = cfg["supernote"].setdefault("wifi", {})
     if wifi_host:
         wifi_cfg["host"] = wifi_host
         wifi_cfg["enabled"] = True
@@ -234,7 +479,9 @@ def status(ctx: click.Context) -> None:
 
     cfg = _load_cfg(ctx)
     proc_cfg = cfg.get("processing", {})
-    sync_folder = Path(cfg.get("supernote", {}).get("sync_folder", "~/supernote-sync")).expanduser()
+    sync_folder = Path(
+        cfg.get("supernote", {}).get("sync_folder", "~/supernote-sync")
+    ).expanduser()
 
     if not sync_folder.exists():
         console.print(f"[yellow]Sync folder does not exist:[/yellow] {sync_folder}")
@@ -245,27 +492,42 @@ def status(ctx: click.Context) -> None:
     dedup = None
     if proc_cfg.get("deduplicate", True):
         from supernote_sync.utils.dedup import DedupCache  # noqa: PLC0415
-        state_dir = Path(proc_cfg.get("state_dir", "~/.supernote-sync")).expanduser()
+
+        state_dir = Path(
+            proc_cfg.get("state_dir", "~/.supernote-sync")
+        ).expanduser()
         dedup = DedupCache(state_dir=state_dir)
 
     table = Table(show_header=True, header_style="bold")
     table.add_column("File")
     table.add_column("Size")
+    table.add_column("Modified")
     table.add_column("Status")
 
-    n_processed = 0
-    n_pending = 0
+    n_processed = n_modified_count = n_pending = 0
     for nf in note_files:
         size_kb = nf.stat().st_size // 1024
-        processed = dedup is not None and dedup.already_processed(nf)
-        if processed:
-            n_processed += 1
-            status_str = "[green]processed[/green]"
+        mtime = _mtime_date(nf).isoformat()
+        if dedup is not None:
+            if dedup.already_processed(nf):
+                n_processed += 1
+                status_str = "[green]processed[/green]"
+            elif dedup.is_modified(nf):
+                n_modified_count += 1
+                status_str = "[yellow]modified[/yellow]"
+            else:
+                n_pending += 1
+                status_str = "[blue]new[/blue]"
         else:
             n_pending += 1
             status_str = "[yellow]pending[/yellow]"
-        table.add_row(nf.name, f"{size_kb} KB", status_str)
+        table.add_row(nf.name, f"{size_kb} KB", mtime, status_str)
 
     if note_files:
         console.print(table)
-    console.print(f"\n{n_processed} processed, {n_pending} pending")
+
+    parts = [f"{n_processed} processed"]
+    if n_modified_count:
+        parts.append(f"{n_modified_count} modified")
+    parts.append(f"{n_pending} pending")
+    console.print(f"\n{', '.join(parts)}")
