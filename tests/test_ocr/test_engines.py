@@ -60,7 +60,8 @@ class TestTesseractEngine:
         """TesseractEngine.run returns an OcrResult."""
         engine = TesseractEngine(threshold=0.70)
         fake_data = self._make_tess_data(["Hello", "world"], [85, 90])
-        with patch("supernote_sync.ocr.tesseract_engine.pytesseract.image_to_data", return_value=fake_data):
+        tess_patch = "supernote_sync.ocr.tesseract_engine.pytesseract.image_to_data"
+        with patch(tess_patch, return_value=fake_data):
             result = engine.run(blank_page)
         assert isinstance(result, OcrResult)
 
@@ -68,7 +69,8 @@ class TestTesseractEngine:
         """TesseractEngine joins words into text."""
         engine = TesseractEngine(threshold=0.70)
         fake_data = self._make_tess_data(["Hello", "world"], [85, 90])
-        with patch("supernote_sync.ocr.tesseract_engine.pytesseract.image_to_data", return_value=fake_data):
+        tess_patch = "supernote_sync.ocr.tesseract_engine.pytesseract.image_to_data"
+        with patch(tess_patch, return_value=fake_data):
             result = engine.run(blank_page)
         assert "Hello" in result.text
         assert "world" in result.text
@@ -77,7 +79,8 @@ class TestTesseractEngine:
         """TesseractEngine computes average confidence correctly."""
         engine = TesseractEngine(threshold=0.70)
         fake_data = self._make_tess_data(["Hello", "world"], [80, 100])
-        with patch("supernote_sync.ocr.tesseract_engine.pytesseract.image_to_data", return_value=fake_data):
+        tess_patch = "supernote_sync.ocr.tesseract_engine.pytesseract.image_to_data"
+        with patch(tess_patch, return_value=fake_data):
             result = engine.run(blank_page)
         assert abs(result.confidence - 0.90) < 0.01
 
@@ -85,7 +88,8 @@ class TestTesseractEngine:
         """TesseractEngine flags low_confidence=True when confidence < threshold."""
         engine = TesseractEngine(threshold=0.70)
         fake_data = self._make_tess_data(["bad"], [30])
-        with patch("supernote_sync.ocr.tesseract_engine.pytesseract.image_to_data", return_value=fake_data):
+        tess_patch = "supernote_sync.ocr.tesseract_engine.pytesseract.image_to_data"
+        with patch(tess_patch, return_value=fake_data):
             result = engine.run(blank_page)
         assert result.low_confidence is True
 
@@ -93,7 +97,8 @@ class TestTesseractEngine:
         """TesseractEngine returns confidence=0.0 when there are no recognised words."""
         engine = TesseractEngine(threshold=0.70)
         fake_data = self._make_tess_data(["", " "], [-1, -1])
-        with patch("supernote_sync.ocr.tesseract_engine.pytesseract.image_to_data", return_value=fake_data):
+        tess_patch = "supernote_sync.ocr.tesseract_engine.pytesseract.image_to_data"
+        with patch(tess_patch, return_value=fake_data):
             result = engine.run(blank_page)
         assert result.confidence == 0.0
         assert result.low_confidence is True

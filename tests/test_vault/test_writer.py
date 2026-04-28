@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import subprocess
 from pathlib import Path
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -50,7 +50,9 @@ def cfg_with_git(vault_path: Path) -> dict:
     }
 
 
-def _make_document(vault_path: Path, content: str = "# Test", has_attachments: bool = True) -> MagicMock:
+def _make_document(
+    vault_path: Path, content: str = "# Test", has_attachments: bool = True
+) -> MagicMock:
     """Return a mock Document."""
     doc = MagicMock()
     doc.output_path = vault_path / "Notes" / "test_note.md"
@@ -98,7 +100,9 @@ class TestVaultWriter:
         writer.write(doc)
         assert doc.output_path.exists()
 
-    def test_git_called_three_times_when_enabled(self, cfg_with_git: dict, vault_path: Path) -> None:
+    def test_git_called_three_times_when_enabled(
+        self, cfg_with_git: dict, vault_path: Path
+    ) -> None:
         """git subprocess is called 3 times (add, commit, push) when git_sync.enabled=True."""
         writer = VaultWriter(cfg_with_git)
         doc = _make_document(vault_path, has_attachments=False)

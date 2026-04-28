@@ -113,10 +113,11 @@ def once(ctx: click.Context, path: Path | None, force: bool) -> None:
         console.print("[yellow]No .note files found.[/yellow]")
         return
 
+    n = len(note_files)
     if force:
-        console.print(f"Processing [bold]{len(note_files)}[/bold] file(s) [yellow](force)[/yellow] …")
+        console.print(f"Processing [bold]{n}[/bold] file(s) [yellow](force)[/yellow] …")
     else:
-        console.print(f"Processing [bold]{len(note_files)}[/bold] file(s) …")
+        console.print(f"Processing [bold]{n}[/bold] file(s) …")
 
     ok = 0
     fail = 0
@@ -133,7 +134,9 @@ def once(ctx: click.Context, path: Path | None, force: bool) -> None:
 
 
 @main.command()
-@click.option("--watch/--no-watch", "watch_mode", default=False, help="Poll continuously for new files.")
+@click.option(
+    "--watch/--no-watch", "watch_mode", default=False, help="Poll continuously for new files."
+)
 @click.pass_context
 def pull(ctx: click.Context, watch_mode: bool) -> None:
     """Pull .note files from the Supernote device over Wi-Fi."""
@@ -217,7 +220,8 @@ def init(ctx: click.Context) -> None:
     else:
         wifi_cfg["enabled"] = False
 
-    config_path.write_text(yaml.dump(cfg, default_flow_style=False, allow_unicode=True), encoding="utf-8")
+    dumped = yaml.dump(cfg, default_flow_style=False, allow_unicode=True)
+    config_path.write_text(dumped, encoding="utf-8")
     console.print(f"\n[green]Config written to[/green] {config_path}")
     console.print(f"[bold]Next step:[/bold] supernote-sync --config {config_path} once")
 
