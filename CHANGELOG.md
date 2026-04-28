@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/xozai/supernote-to-obsidian/compare/v0.2.0...v0.3.0) (2026-04-28)
+
+
+### Features
+
+* Sprint 2+3 — CLI filters, schedule command, run summary, modified status ([#7](https://github.com/xozai/supernote-to-obsidian/issues/7)) ([9e61e65](https://github.com/xozai/supernote-to-obsidian/commit/9e61e654b18b0707ea2c2501e8d1878a826c9e32))
+
 ## [0.2.0](https://github.com/xozai/supernote-to-obsidian/compare/v0.1.0...v0.2.0) (2026-04-28)
 
 
