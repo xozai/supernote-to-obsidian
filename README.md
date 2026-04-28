@@ -61,7 +61,7 @@ and continues with the next file.
 | `VaultWriter`        | `vault/writer.py`               | Write `.md` and attachment PNGs; optionally git push      |
 | `DedupCache`         | `utils/dedup.py`                | MD5-based cache to skip already-processed files           |
 | `Pipeline`           | `pipeline.py`                   | Orchestrate all stages; owns the watchdog file watcher    |
-| `CLI`                | `cli.py`                        | Click entry point exposing init/once/watch/pull/status    |
+| `CLI`                | `cli.py`                        | Click entry point: init/once/watch/pull/schedule/status   |
 
 ### OCR engines
 
@@ -81,6 +81,8 @@ costs. Both engines flag pages whose average word confidence falls below
 
 ```markdown
 ---
+title: MySketch
+date: 2024-06-15
 created: 2024-06-15T10:30:00+00:00
 source: supernote
 original_file: /home/user/supernote-sync/MySketch.note
@@ -99,6 +101,10 @@ hard to read scrawl
 
 ![[MySketch_page001.png]]
 ```
+
+`title` is derived from the `.note` filename stem. `date` is the file's modification date (when
+the note was last exported from the device), not the processing timestamp. Consecutive identical
+OCR lines are collapsed automatically to reduce noise from repeated handwriting artefacts.
 
 **Page images** — `<attachments_subfolder>/<stem>_page000.png`, one PNG per page.
 
@@ -188,7 +194,7 @@ Verify the CLI installed correctly:
 
 ```bash
 supernote-sync --help
-# Should print: init, once, watch, pull, status commands
+# Should print: init, once, watch, pull, schedule, status commands
 ```
 
 ---
@@ -325,14 +331,23 @@ mkdir -p ~/.supernote-sync/logs
 ```bash
 source .venv/bin/activate
 
+# Preview what would be processed (no vault writes)
+supernote-sync --config config.yaml once --dry-run
+
 # Process all .note files in sync_folder once
 supernote-sync --config config.yaml once
 
-# Check what was processed
+# Process only files modified in the last week
+supernote-sync --config config.yaml once --since 2024-06-08
+
+# Check what was processed (shows new / modified / processed states)
 supernote-sync --config config.yaml status
 
 # Start the live watcher (blocks until Ctrl-C)
 supernote-sync --config config.yaml watch
+
+# Or run on a recurring 1-hour schedule instead of a system service
+supernote-sync --config config.yaml schedule --interval 3600
 ```
 
 ---
@@ -364,6 +379,8 @@ fully annotated template. The table below lists every top-level key:
 supernote-sync [--config PATH] COMMAND [ARGS]...
 ```
 
+**Commands:** `init` · `once` · `watch` · `pull` · `schedule` · `status`
+
 **Global option:**
 
 | Option          | Default       | Description                         |
@@ -388,7 +405,7 @@ before overwriting.
 ### `once`
 
 ```bash
-supernote-sync --config config.yaml once [PATH]
+supernote-sync --config config.yaml once [OPTIONS] [PATH]
 ```
 
 Process `.note` files once and exit. `PATH` is optional:
@@ -396,6 +413,20 @@ Process `.note` files once and exit. `PATH` is optional:
 - omitted — process all `*.note` files in `sync_folder`
 - a directory — process all `*.note` files inside it
 - a single `.note` file — process only that file
+
+After every batch run a summary line is printed, e.g. `3 new, 1 modified, 12 skipped`.
+
+**Options:**
+
+| Option | Description |
+|---|---|
+| `--force` | Bypass the dedup cache and overwrite any existing vault note with the same stem instead of creating a new dated file |
+| `--dry-run` | Print a table of what *would* be processed (name, size, mtime, status) without writing anything |
+| `--since DATE` | Only include files whose mtime is on or after `DATE` (format: `YYYY-MM-DD`) |
+| `--until DATE` | Only include files whose mtime is on or before `DATE` |
+| `--tag TAG` | Only include files whose existing vault note already contains `TAG` in its frontmatter |
+
+`--since`, `--until`, and `--tag` are combinable. `--dry-run` can be combined with any filter to preview results before committing.
 
 ---
 
@@ -422,14 +453,41 @@ to poll continuously at the interval set by `poll_interval_seconds`.
 
 ---
 
+### `schedule`
+
+```bash
+supernote-sync --config config.yaml schedule [--interval SECONDS]
+```
+
+Run the full sync loop on a recurring timer using APScheduler. Executes an immediate first run
+on startup, then repeats every `--interval` seconds (default `3600`). Useful as an alternative
+to the systemd/launchd service when you want in-process scheduling without a separate daemon.
+
+| Option | Default | Description |
+|---|---|---|
+| `--interval N` | `3600` | Seconds between each sync run |
+
+Press Ctrl-C to stop.
+
+---
+
 ### `status`
 
 ```bash
 supernote-sync --config config.yaml status
 ```
 
-Print a table of every `.note` file in `sync_folder` with its size and processing status
-(`processed` or `pending`, based on the dedup cache). Prints a summary line at the end.
+Print a table of every `.note` file in `sync_folder` with its size, modification date, and
+processing status. Three states are reported when deduplication is enabled:
+
+| Status | Meaning |
+|---|---|
+| `processed` (green) | File was processed and its MD5 matches the stored hash — no action needed |
+| `modified` (yellow) | File was processed before, but its content has changed since — re-export detected |
+| `new` (blue) | File has never been processed |
+
+Without deduplication, all files show as `pending`. Prints a summary line at the end,
+e.g. `4 processed, 1 modified, 2 pending`.
 
 ---
 
