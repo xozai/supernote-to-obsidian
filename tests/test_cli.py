@@ -91,7 +91,7 @@ class TestOnceCommand:
             )
 
         assert result.exit_code == 0
-        mock_pipeline.process_file.assert_called_once_with(note)
+        mock_pipeline.process_file.assert_called_once_with(note, force=False)
 
     def test_once_with_directory(self, config_file: Path, tmp_path: Path) -> None:
         """once processes all .note files in a directory when PATH is a dir."""

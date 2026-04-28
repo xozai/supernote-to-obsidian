@@ -194,6 +194,59 @@ def test_is_blank_page_returns_false_for_dark_pixels(tmp_path: Path) -> None:
     assert pipeline._is_blank_page(page) is False
 
 
+def test_process_file_force_bypasses_dedup(tmp_path: Path) -> None:
+    """process_file(force=True) processes a file even when dedup says it's done."""
+    from unittest.mock import MagicMock, patch
+
+    from supernote_sync.pipeline import Pipeline
+
+    cfg = {
+        "supernote": {"sync_folder": str(tmp_path / "sync")},
+        "ocr": {"engine": "tesseract", "low_confidence_threshold": 0.70},
+        "obsidian": {
+            "vault_path": str(tmp_path / "vault"),
+            "notes_subfolder": "Notes",
+            "attachments_subfolder": "attachments",
+            "frontmatter": {"default_tags": [], "extra_fields": {}},
+            "git_sync": {"enabled": False},
+        },
+        "processing": {
+            "deduplicate": True,
+            "state_dir": str(tmp_path / "state"),
+            "render_dpi": 200,
+            "output_filename_pattern": "%Y-%m-%d_{note_name}",
+        },
+        "logging": {"level": "DEBUG"},
+    }
+    note = tmp_path / "test.note"
+    note.write_bytes(b"fake")
+
+    mock_dedup = MagicMock()
+    mock_dedup.already_processed.return_value = True  # would normally skip
+
+    from PIL import Image
+    from supernote_sync.ingestion.note_parser import NotePage
+
+    white_img = Image.new("RGB", (100, 100), (255, 255, 255))
+
+    page = NotePage(index=0, image=white_img, source_file=note)
+
+    with (
+        patch("supernote_sync.utils.dedup.DedupCache", return_value=mock_dedup),
+        patch("supernote_sync.pipeline.NoteParser.extract_pages", return_value=[page]),
+        patch("supernote_sync.pipeline.Pipeline._is_blank_page", return_value=False),
+        patch("supernote_sync.ocr.tesseract_engine.pytesseract.image_to_data",
+              return_value={"text": ["hi"], "conf": [90]}),
+    ):
+        pipeline = Pipeline(cfg)
+        pipeline._dedup = mock_dedup
+        result = pipeline.process_file(note, force=True)
+
+    # force=True should bypass the dedup check and succeed
+    assert result is True
+    mock_dedup.already_processed.assert_not_called()
+
+
 def test_process_file_returns_false_for_all_blank_pages(tmp_path: Path, mocker) -> None:
     """process_file returns False when all pages are blank."""
     from PIL import Image
