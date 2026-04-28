@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "supernote-to-obsidian"
-version = "0.2.0"
+version = "0.3.0"
 description = "Sync handwritten notes from a Supernote Manta tablet to an Obsidian vault via OCR"
 requires-python = ">=3.11"
 readme = "README.md"
