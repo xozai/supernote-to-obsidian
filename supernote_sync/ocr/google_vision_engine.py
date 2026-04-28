@@ -73,7 +73,7 @@ class GoogleVisionEngine(BaseOcrEngine):
 
         client = self._get_client()
         vision_image = vision.Image(content=image_bytes)  # type: ignore[attr-defined]
-        response = client.document_text_detection(image=vision_image)  # type: ignore[union-attr]
+        response = client.document_text_detection(image=vision_image)  # type: ignore[union-attr,attr-defined]
 
         if response.error.message:
             raise RuntimeError(

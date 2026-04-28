@@ -72,7 +72,7 @@ class NoteDocument:
             A string starting with ``---`` frontmatter followed by the body.
         """
         post = frontmatter.Post(self.body, **self.frontmatter_data)
-        return frontmatter.dumps(post)
+        return str(frontmatter.dumps(post))
 
 
 @dataclass
