@@ -64,7 +64,6 @@ class TestSetupLogging:
         # Override log_dir to avoid writing to home dir
         cfg: dict = {}
         # Monkey-patch expanduser to use tmp_path
-        import supernote_sync.utils.logging as log_module  # noqa: PLC0415
         from unittest.mock import patch  # noqa: PLC0415
 
         with patch.object(

@@ -1,6 +1,7 @@
 from __future__ import annotations
-import pytest
+
 from PIL import Image
+
 from supernote_sync.ocr.preprocessor import preprocess
 
 

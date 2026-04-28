@@ -49,16 +49,17 @@ class Pipeline:
             state_dir = Path(proc_cfg.get("state_dir", "~/.supernote-sync")).expanduser()
             self._dedup = DedupCache(state_dir=state_dir)
 
-    def process_file(self, note_path: Path) -> bool:
+    def process_file(self, note_path: Path, force: bool = False) -> bool:
         """Convert a single ``.note`` file and write it to the vault.
 
         Steps:
-        1. Dedup check — skip if already processed.
+        1. Dedup check — skip if already processed (bypassed when *force* is ``True``).
         2. Extract pages via :class:`~supernote_sync.ingestion.note_parser.NoteParser`.
         3. Run OCR on each page.
-        4. Build the :class:`~supernote_sync.formatter.markdown_builder.NoteDocument`.
-        5. Write the document to the vault.
-        6. Mark the file as processed in the dedup cache.
+        4. Filter blank pages.
+        5. Build the :class:`~supernote_sync.formatter.markdown_builder.NoteDocument`.
+        6. Write the document to the vault.
+        7. Mark the file as processed in the dedup cache.
 
         On any unhandled exception the method catches the error, writes a
         :class:`~supernote_sync.formatter.markdown_builder.FailureDocument`,
@@ -66,14 +67,16 @@ class Pipeline:
 
         Args:
             note_path: Path to the ``.note`` file to process.
+            force: When ``True``, bypass the dedup cache and overwrite any
+                existing note with the same stem in the vault.
 
         Returns:
             ``True`` on success, ``False`` if skipped or on failure.
         """
-        logger.info("Processing %s", note_path)
+        logger.info("Processing %s (force=%s)", note_path, force)
 
-        # Deduplication check
-        if self._dedup_enabled and self._dedup is not None:
+        # Deduplication check — skipped when force=True.
+        if not force and self._dedup_enabled and self._dedup is not None:
             if self._dedup.already_processed(note_path):
                 logger.info("Skipping already-processed file: %s", note_path.name)
                 return False
@@ -93,7 +96,12 @@ class Pipeline:
             filtered_pages = [p for p, r in non_blank]
             filtered_results = [r for p, r in non_blank]
 
-            document = self.builder.build(note_path, filtered_pages, filtered_results)
+            document = self.builder.build(
+                note_path,
+                filtered_pages,
+                filtered_results,
+                update_in_place=force,
+            )
             self.writer.write(document)
 
             if self._dedup_enabled and self._dedup is not None:

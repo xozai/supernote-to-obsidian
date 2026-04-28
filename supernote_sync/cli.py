@@ -73,12 +73,21 @@ def watch(ctx: click.Context) -> None:
 
 @main.command()
 @click.argument("path", required=False, type=click.Path(path_type=Path))
+@click.option(
+    "--force",
+    is_flag=True,
+    default=False,
+    help="Bypass the dedup cache and overwrite existing notes in the vault.",
+)
 @click.pass_context
-def once(ctx: click.Context, path: Path | None) -> None:
+def once(ctx: click.Context, path: Path | None, force: bool) -> None:
     """Process .note files once (either a single file, or all in sync_folder).
 
     PATH  Optional path to a specific .note file or directory.  If omitted,
           all *.note files in the configured sync_folder are processed.
+
+    Use --force to reprocess files that have already been converted, overwriting
+    the existing note in the vault rather than creating a new dated copy.
     """
     cfg: dict[str, Any] = _load_cfg(ctx)
     from supernote_sync.pipeline import Pipeline  # noqa: PLC0415
@@ -104,11 +113,16 @@ def once(ctx: click.Context, path: Path | None) -> None:
         console.print("[yellow]No .note files found.[/yellow]")
         return
 
-    console.print(f"Processing [bold]{len(note_files)}[/bold] file(s) …")
+    n = len(note_files)
+    if force:
+        console.print(f"Processing [bold]{n}[/bold] file(s) [yellow](force)[/yellow] …")
+    else:
+        console.print(f"Processing [bold]{n}[/bold] file(s) …")
+
     ok = 0
     fail = 0
     for nf in note_files:
-        result = pipeline.process_file(nf)
+        result = pipeline.process_file(nf, force=force)
         if result:
             ok += 1
             console.print(f"  [green]✓[/green] {nf.name}")
@@ -120,7 +134,9 @@ def once(ctx: click.Context, path: Path | None) -> None:
 
 
 @main.command()
-@click.option("--watch/--no-watch", "watch_mode", default=False, help="Poll continuously for new files.")
+@click.option(
+    "--watch/--no-watch", "watch_mode", default=False, help="Poll continuously for new files."
+)
 @click.pass_context
 def pull(ctx: click.Context, watch_mode: bool) -> None:
     """Pull .note files from the Supernote device over Wi-Fi."""
@@ -204,7 +220,8 @@ def init(ctx: click.Context) -> None:
     else:
         wifi_cfg["enabled"] = False
 
-    config_path.write_text(yaml.dump(cfg, default_flow_style=False, allow_unicode=True), encoding="utf-8")
+    dumped = yaml.dump(cfg, default_flow_style=False, allow_unicode=True)
+    config_path.write_text(dumped, encoding="utf-8")
     console.print(f"\n[green]Config written to[/green] {config_path}")
     console.print(f"[bold]Next step:[/bold] supernote-sync --config {config_path} once")
 

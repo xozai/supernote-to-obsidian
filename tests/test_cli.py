@@ -91,7 +91,7 @@ class TestOnceCommand:
             )
 
         assert result.exit_code == 0
-        mock_pipeline.process_file.assert_called_once_with(note)
+        mock_pipeline.process_file.assert_called_once_with(note, force=False)
 
     def test_once_with_directory(self, config_file: Path, tmp_path: Path) -> None:
         """once processes all .note files in a directory when PATH is a dir."""
@@ -160,13 +160,16 @@ class TestPullCommand:
 def test_status_empty_sync_folder(tmp_path, mocker):
     """status command with empty sync folder prints 0 processed, 0 pending."""
     from click.testing import CliRunner
+
     from supernote_sync.cli import main
 
     cfg = {
         "supernote": {"sync_folder": str(tmp_path), "wifi": {"enabled": False}},
         "obsidian": {"vault_path": str(tmp_path / "vault")},
         "ocr": {"engine": "tesseract", "low_confidence_threshold": 0.7},
-        "processing": {"deduplicate": False, "state_dir": str(tmp_path / "state"), "render_dpi": 200},
+        "processing": {
+            "deduplicate": False, "state_dir": str(tmp_path / "state"), "render_dpi": 200
+        },
         "logging": {"level": "WARNING", "log_dir": str(tmp_path / "logs"), "max_log_files": 3},
     }
     mocker.patch("supernote_sync.cli.load_config", return_value=cfg)

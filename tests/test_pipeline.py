@@ -59,12 +59,13 @@ def _make_blank_page(note_file: Path) -> NotePage:
 class TestPipeline:
     """Tests for Pipeline.process_file()."""
 
-    def test_process_file_writes_markdown(self, cfg: dict, note_file: Path, vault_path: Path) -> None:
+    def test_process_file_writes_markdown(
+        self, cfg: dict, note_file: Path, vault_path: Path
+    ) -> None:
         """process_file writes a markdown file to the vault."""
         from supernote_sync.pipeline import Pipeline
 
         page = _make_blank_page(note_file)
-        result = OcrResult(text="Hello", confidence=0.90, page_index=0)
 
         with (
             patch(
@@ -133,6 +134,7 @@ class TestPipeline:
 def test_is_blank_page_returns_true_for_white_image(tmp_path: Path) -> None:
     """_is_blank_page returns True for a pure white image."""
     from PIL import Image
+
     from supernote_sync.ingestion.note_parser import NotePage
     from supernote_sync.pipeline import Pipeline
 
@@ -163,6 +165,7 @@ def test_is_blank_page_returns_true_for_white_image(tmp_path: Path) -> None:
 def test_is_blank_page_returns_false_for_dark_pixels(tmp_path: Path) -> None:
     """_is_blank_page returns False when there are enough dark pixels."""
     from PIL import Image
+
     from supernote_sync.ingestion.note_parser import NotePage
     from supernote_sync.pipeline import Pipeline
 
@@ -185,7 +188,7 @@ def test_is_blank_page_returns_false_for_dark_pixels(tmp_path: Path) -> None:
         "logging": {"level": "DEBUG"},
     }
     pipeline = Pipeline(cfg)
-    # Draw a 20x10 black rectangle — 200 dark pixels out of 10000 = 2%, below the 99% white threshold
+    # 20x10 black rectangle = 200 dark pixels / 10000 total = 2%, below the 99% white threshold
     img = Image.new("RGB", (100, 100), (255, 255, 255))
     for x in range(20):
         for y in range(10):
@@ -194,11 +197,65 @@ def test_is_blank_page_returns_false_for_dark_pixels(tmp_path: Path) -> None:
     assert pipeline._is_blank_page(page) is False
 
 
+def test_process_file_force_bypasses_dedup(tmp_path: Path) -> None:
+    """process_file(force=True) processes a file even when dedup says it's done."""
+    from unittest.mock import MagicMock, patch
+
+    from supernote_sync.pipeline import Pipeline
+
+    cfg = {
+        "supernote": {"sync_folder": str(tmp_path / "sync")},
+        "ocr": {"engine": "tesseract", "low_confidence_threshold": 0.70},
+        "obsidian": {
+            "vault_path": str(tmp_path / "vault"),
+            "notes_subfolder": "Notes",
+            "attachments_subfolder": "attachments",
+            "frontmatter": {"default_tags": [], "extra_fields": {}},
+            "git_sync": {"enabled": False},
+        },
+        "processing": {
+            "deduplicate": True,
+            "state_dir": str(tmp_path / "state"),
+            "render_dpi": 200,
+            "output_filename_pattern": "%Y-%m-%d_{note_name}",
+        },
+        "logging": {"level": "DEBUG"},
+    }
+    note = tmp_path / "test.note"
+    note.write_bytes(b"fake")
+
+    mock_dedup = MagicMock()
+    mock_dedup.already_processed.return_value = True  # would normally skip
+
+    from PIL import Image
+
+    from supernote_sync.ingestion.note_parser import NotePage
+
+    white_img = Image.new("RGB", (100, 100), (255, 255, 255))
+
+    page = NotePage(index=0, image=white_img, source_file=note)
+
+    with (
+        patch("supernote_sync.utils.dedup.DedupCache", return_value=mock_dedup),
+        patch("supernote_sync.pipeline.NoteParser.extract_pages", return_value=[page]),
+        patch("supernote_sync.pipeline.Pipeline._is_blank_page", return_value=False),
+        patch("supernote_sync.ocr.tesseract_engine.pytesseract.image_to_data",
+              return_value={"text": ["hi"], "conf": [90]}),
+    ):
+        pipeline = Pipeline(cfg)
+        pipeline._dedup = mock_dedup
+        result = pipeline.process_file(note, force=True)
+
+    # force=True should bypass the dedup check and succeed
+    assert result is True
+    mock_dedup.already_processed.assert_not_called()
+
+
 def test_process_file_returns_false_for_all_blank_pages(tmp_path: Path, mocker) -> None:
     """process_file returns False when all pages are blank."""
     from PIL import Image
+
     from supernote_sync.ingestion.note_parser import NotePage
-    from supernote_sync.ocr.engine_factory import OcrResult
     from supernote_sync.pipeline import Pipeline
 
     cfg = {
@@ -224,7 +281,9 @@ def test_process_file_returns_false_for_all_blank_pages(tmp_path: Path, mocker) 
     mocker.patch.object(pipeline.parser, "extract_pages", return_value=[
         NotePage(index=0, image=white_img, source_file=tmp_path / "t.note")
     ])
-    mocker.patch.object(pipeline.ocr, "run", return_value=OcrResult(text="", confidence=0.0, page_index=0))
+    mocker.patch.object(
+        pipeline.ocr, "run", return_value=OcrResult(text="", confidence=0.0, page_index=0)
+    )
     mocker.patch.object(pipeline.writer, "write")
     note = tmp_path / "blank.note"
     note.write_bytes(b"fake")

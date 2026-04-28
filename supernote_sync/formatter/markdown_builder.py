@@ -20,6 +20,24 @@ _LOW_CONFIDENCE_MARKER = "<!-- OCR_LOW_CONFIDENCE -->"
 _FAILURE_MARKER = "<!-- OCR_FAILED -->"
 
 
+def _dedupe_adjacent_lines(text: str) -> str:
+    """Remove consecutive identical lines from OCR text.
+
+    Tesseract sometimes repeats the same line when recognition confidence is
+    borderline.  This collapses those runs without removing intentional
+    duplicate content that is separated by a blank line.
+
+    Args:
+        text: Raw OCR text string.
+
+    Returns:
+        Text with consecutive identical lines collapsed to one.
+    """
+    lines = text.split("\n")
+    deduped = [line for i, line in enumerate(lines) if i == 0 or line != lines[i - 1]]
+    return "\n".join(deduped)
+
+
 class Document(Protocol):
     """Protocol implemented by all document types produced by the formatter."""
 
@@ -54,7 +72,7 @@ class NoteDocument:
             A string starting with ``---`` frontmatter followed by the body.
         """
         post = frontmatter.Post(self.body, **self.frontmatter_data)
-        return frontmatter.dumps(post)
+        return str(frontmatter.dumps(post))
 
 
 @dataclass
@@ -116,24 +134,52 @@ class MarkdownBuilder:
         note_path: Path,
         pages: list[NotePage],
         ocr_results: list[OcrResult],
+        update_in_place: bool = False,
     ) -> NoteDocument:
         """Build a :class:`NoteDocument` from pages and their OCR results.
 
         For each page an attachment PNG is generated and an Obsidian image
         embed (``![[filename]]``) is inserted into the body.
 
+        When *update_in_place* is ``True`` and a note whose filename contains
+        the same stem already exists in :attr:`notes_dir`, that file's path is
+        reused instead of generating a new dated filename.  This enables
+        idempotent forced reruns.
+
         Args:
             note_path: Path to the source ``.note`` file.
             pages: Parsed note pages.
             ocr_results: OCR results aligned with *pages* by index.
+            update_in_place: If ``True``, overwrite an existing note with the
+                same stem rather than creating a new dated file.
 
         Returns:
             A :class:`NoteDocument` ready to be handed to the vault writer.
         """
         now = datetime.now(tz=timezone.utc)
         stem = note_path.stem
-        filename_base = now.strftime(self.filename_pattern).replace("{note_name}", stem)
-        output_path = self.notes_dir / f"{filename_base}.md"
+
+        # Resolve output path — reuse existing file when updating in place.
+        output_path: Path
+        if update_in_place:
+            existing = list(self.notes_dir.glob(f"*{stem}*.md"))
+            if existing:
+                output_path = existing[0]
+                logger.info("Updating existing note in place: %s", output_path.name)
+            else:
+                filename_base = now.strftime(self.filename_pattern).replace("{note_name}", stem)
+                output_path = self.notes_dir / f"{filename_base}.md"
+        else:
+            filename_base = now.strftime(self.filename_pattern).replace("{note_name}", stem)
+            output_path = self.notes_dir / f"{filename_base}.md"
+
+        # Derive note date from file modification time; fall back to now.
+        try:
+            note_date = datetime.fromtimestamp(
+                note_path.stat().st_mtime, tz=timezone.utc
+            ).date().isoformat()
+        except OSError:
+            note_date = now.date().isoformat()
 
         attachments: list[tuple[str, bytes]] = []
         body_parts: list[str] = []
@@ -145,8 +191,8 @@ class MarkdownBuilder:
             page.image.save(buf, format="PNG")
             attachments.append((img_name, buf.getvalue()))
 
-            # Build text block
-            text_block = result.text
+            # Deduplicate adjacent identical lines then apply confidence marker.
+            text_block = _dedupe_adjacent_lines(result.text)
             if result.low_confidence:
                 text_block = f"{_LOW_CONFIDENCE_MARKER}\n{text_block}"
 
@@ -157,6 +203,8 @@ class MarkdownBuilder:
         body = "\n".join(body_parts).strip()
 
         fm_data: dict[str, Any] = {
+            "title": stem,
+            "date": note_date,
             "created": now.isoformat(),
             "source": "supernote",
             "original_file": str(note_path),

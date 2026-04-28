@@ -119,7 +119,9 @@ class TestWiFiPuller:
 
         assert count == 0
 
-    def test_download_uses_basename_for_nested_path(self, puller: WiFiPuller, dest_dir: Path) -> None:
+    def test_download_uses_basename_for_nested_path(
+        self, puller: WiFiPuller, dest_dir: Path
+    ) -> None:
         """_download_file uses only the basename when remote path contains subdirectories."""
         file_resp = MagicMock()
         file_resp.raise_for_status.return_value = None

@@ -55,6 +55,85 @@ def low_conf_result() -> OcrResult:
 class TestNoteDocument:
     """Tests for NoteDocument produced by MarkdownBuilder."""
 
+    def test_frontmatter_contains_title(
+        self,
+        builder: MarkdownBuilder,
+        sample_page: NotePage,
+        good_result: OcrResult,
+    ) -> None:
+        """Rendered frontmatter contains a 'title' field equal to the note stem."""
+        doc = builder.build(sample_page.source_file, [sample_page], [good_result])
+        assert doc.frontmatter_data["title"] == "my_note"
+
+    def test_frontmatter_contains_date(
+        self,
+        builder: MarkdownBuilder,
+        sample_page: NotePage,
+        good_result: OcrResult,
+    ) -> None:
+        """Rendered frontmatter contains a 'date' field in ISO8601 date format."""
+        doc = builder.build(sample_page.source_file, [sample_page], [good_result])
+        assert "date" in doc.frontmatter_data
+        # Should be a valid ISO date string YYYY-MM-DD
+        import re
+        assert re.match(r"\d{4}-\d{2}-\d{2}", doc.frontmatter_data["date"])
+
+    def test_update_in_place_reuses_existing_path(
+        self,
+        builder: MarkdownBuilder,
+        sample_page: NotePage,
+        good_result: OcrResult,
+    ) -> None:
+        """When update_in_place=True and a matching file exists, its path is reused."""
+        # Create an existing note file in notes_dir whose name contains the stem
+        existing = builder.notes_dir / "2024-01-01_my_note.md"
+        existing.write_text("old content", encoding="utf-8")
+
+        doc = builder.build(
+            sample_page.source_file, [sample_page], [good_result], update_in_place=True
+        )
+        assert doc.output_path == existing
+
+    def test_update_in_place_creates_new_when_no_existing(
+        self,
+        builder: MarkdownBuilder,
+        sample_page: NotePage,
+        good_result: OcrResult,
+    ) -> None:
+        """When update_in_place=True but no existing file matches, a new file is created."""
+        doc = builder.build(
+            sample_page.source_file, [sample_page], [good_result], update_in_place=True
+        )
+        assert "my_note" in doc.output_path.name
+        assert doc.output_path.suffix == ".md"
+
+    def test_adjacent_duplicate_lines_collapsed(
+        self,
+        builder: MarkdownBuilder,
+        sample_page: NotePage,
+    ) -> None:
+        """Consecutive identical OCR lines are collapsed to one."""
+        result = OcrResult(
+            text="hello\nhello\nhello\nworld", confidence=0.90, page_index=0
+        )
+        doc = builder.build(sample_page.source_file, [sample_page], [result])
+        body = doc.body
+        # "hello" should appear only once, "world" once
+        assert body.count("hello") == 1
+        assert "world" in body
+
+    def test_non_adjacent_duplicates_preserved(
+        self,
+        builder: MarkdownBuilder,
+        sample_page: NotePage,
+    ) -> None:
+        """Non-adjacent duplicate lines are not removed."""
+        result = OcrResult(
+            text="hello\nworld\nhello", confidence=0.90, page_index=0
+        )
+        doc = builder.build(sample_page.source_file, [sample_page], [result])
+        assert doc.body.count("hello") == 2
+
     def test_build_returns_note_document(
         self,
         builder: MarkdownBuilder,
