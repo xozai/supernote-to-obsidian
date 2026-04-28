@@ -1,0 +1,43 @@
+name: Release Please
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: write
+  checks: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    steps:
+      - uses: googleapis/release-please-action@v4
+        id: release
+        with:
+          release-type: python
+
+      - name: Report lint-pr-title check on Release PR
+        if: ${{ steps.release.outputs.pr != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_SHA=$(gh pr view --repo "$GITHUB_REPOSITORY" "${{ fromJSON(steps.release.outputs.pr).number }}" --json headRefOid -q .headRefOid)
+          gh api repos/$GITHUB_REPOSITORY/check-runs \
+            --method POST \
+            -f name="lint-pr-title" \
+            -f head_sha="$PR_SHA" \
+            -f status="completed" \
+            -f conclusion="success" \
+            -f "output[title]=PR title is valid" \
+            -f "output[summary]=Release PR title follows Conventional Commits format"
+
+      - name: Auto-merge Release PR
+        if: ${{ steps.release.outputs.pr != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh pr merge --auto --squash --repo "$GITHUB_REPOSITORY" "${{ fromJSON(steps.release.outputs.pr).number }}"
