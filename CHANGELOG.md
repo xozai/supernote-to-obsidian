@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.3](https://github.com/xozai/supernote-to-obsidian/compare/v0.3.2...v0.3.3) (2026-05-20)
+
+
+### Documentation
+
+* update README for v0.2.0 — new CLI flags, schedule command, modified status ([#13](https://github.com/xozai/supernote-to-obsidian/issues/13)) ([6bdda77](https://github.com/xozai/supernote-to-obsidian/commit/6bdda77bcc0f1ef79f75f330c9595a4b996a4d3a))
+
 ## [0.3.2](https://github.com/xozai/supernote-to-obsidian/compare/v0.3.1...v0.3.2) (2026-05-20)
 
 
