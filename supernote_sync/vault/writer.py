@@ -60,9 +60,8 @@ class VaultWriter:
                 logger.error("Failed to write attachment %s: %s", dest, exc)
                 attachment_errors.append(filename)
         if attachment_errors:
-            raise OSError(
-                f"Failed to write {len(attachment_errors)} attachment(s): {', '.join(attachment_errors)}"
-            )
+            names = ", ".join(attachment_errors)
+            raise OSError(f"Failed to write {len(attachment_errors)} attachment(s): {names}")
 
         # Write markdown note
         output_path: Path = document.output_path

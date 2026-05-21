@@ -132,8 +132,9 @@ def test_process_file_returns_false_for_zero_pages(
     cfg: dict, note_file: Path, vault_path: Path
 ) -> None:
     """extract_pages returning [] writes a failure stub and skips mark_processed."""
-    from supernote_sync.pipeline import Pipeline
     from unittest.mock import MagicMock, patch
+
+    from supernote_sync.pipeline import Pipeline
     cfg = dict(cfg)
     cfg["processing"] = {**cfg["processing"], "deduplicate": True}
     mock_dedup = MagicMock()
