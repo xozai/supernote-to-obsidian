@@ -30,7 +30,7 @@ dependencies = [
 
 [project.optional-dependencies]
 supernote = [
-    "supernote-tool>=0.1",
+    "supernotelib>=0.7",
 ]
 dev = [
     "pytest",
