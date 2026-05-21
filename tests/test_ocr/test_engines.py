@@ -139,6 +139,7 @@ class TestGoogleVisionEngine:
         """Empty path uses Application Default Credentials — skip the file check."""
         import sys
         from unittest.mock import MagicMock, patch
+
         from supernote_sync.ocr.google_vision_engine import GoogleVisionEngine
         engine = GoogleVisionEngine(credentials_path="")
         mock_vision = MagicMock()
