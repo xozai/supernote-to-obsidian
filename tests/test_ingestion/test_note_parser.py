@@ -55,33 +55,43 @@ class TestStubExtract:
 class TestExtractPages:
     """Tests for extract_pages behaviour."""
 
-    def test_fallback_when_supernote_tool_missing(
+    def test_fallback_when_supernotelib_missing(
         self, parser: NoteParser, fake_note: Path
     ) -> None:
-        """extract_pages falls back to stub when supernote_tool is not importable."""
-        with patch.dict(sys.modules, {"supernote_tool": None}):
+        """extract_pages falls back to stub when supernotelib is not importable."""
+        with patch.dict(sys.modules, {"supernotelib": None, "supernotelib.converter": None}):
             pages = parser.extract_pages(fake_note)
         assert len(pages) == 1
         assert isinstance(pages[0], NotePage)
         assert isinstance(pages[0].image, Image.Image)
 
-    def test_extract_pages_uses_supernote_tool_when_available(
+    def test_extract_pages_uses_supernotelib_when_available(
         self, parser: NoteParser, fake_note: Path
     ) -> None:
-        """extract_pages uses supernote_tool when present."""
+        """extract_pages uses supernotelib when present."""
         mock_img = Image.new("RGB", (100, 100), color=(200, 200, 200))
-        mock_page = MagicMock()
-        mock_page.to_image.return_value = mock_img
+
+        mock_converter = MagicMock()
+        mock_converter.convert.return_value = mock_img
 
         mock_notebook = MagicMock()
-        mock_notebook.pages = [mock_page]
+        mock_notebook.get_total_pages.return_value = 1
 
-        mock_supernote_tool = MagicMock()
-        mock_supernote_tool.load_notebook.return_value = mock_notebook
+        mock_supernotelib = MagicMock()
+        mock_supernotelib.load_notebook.return_value = mock_notebook
+        # `import supernotelib.converter as snconverter` resolves via attribute access on the
+        # supernotelib mock, so configure ImageConverter on that attribute.
+        mock_supernotelib.converter.ImageConverter.return_value = mock_converter
 
-        with patch.dict(sys.modules, {"supernote_tool": mock_supernote_tool}):
+        with patch.dict(
+            sys.modules,
+            {
+                "supernotelib": mock_supernotelib,
+                "supernotelib.converter": mock_supernotelib.converter,
+            },
+        ):
             pages = parser.extract_pages(fake_note)
 
         assert len(pages) == 1
         assert pages[0].image is mock_img
-        mock_page.to_image.assert_called_once_with(dpi=200)
+        mock_converter.convert.assert_called_once_with(0)

@@ -58,29 +58,28 @@ class NoteParser:
             List of :class:`NotePage` instances, one per page.
         """
         try:
-            import supernote_tool  # type: ignore[import]
+            import supernotelib  # type: ignore[import]
+            import supernotelib.converter as snconverter  # type: ignore[import]
 
-            logger.debug("Parsing %s with supernote_tool", note_path)
-            notebook = supernote_tool.load_notebook(str(note_path))
+            logger.debug("Parsing %s with supernotelib", note_path)
+            notebook = supernotelib.load_notebook(str(note_path))
+            converter = snconverter.ImageConverter(notebook)
+            total = notebook.get_total_pages()
             pages: list[NotePage] = []
-            for idx, page in enumerate(notebook.pages):
-                try:
-                    img: Image.Image = page.to_image(dpi=self.dpi)
-                except TypeError:
-                    logger.warning("to_image() does not accept dpi kwarg — retrying without it")
-                    img = page.to_image()  # type: ignore[call-arg]
+            for idx in range(total):
+                img: Image.Image = converter.convert(idx)
                 pages.append(NotePage(index=idx, image=img, source_file=note_path))
             logger.info("Extracted %d page(s) from %s", len(pages), note_path.name)
             return pages
         except ImportError:
             logger.warning(
-                "supernote_tool is not installed — falling back to stub extraction for %s",
+                "supernotelib is not installed — falling back to stub extraction for %s",
                 note_path,
             )
             return self._stub_extract(note_path)
         except Exception as exc:  # noqa: BLE001
             logger.warning(
-                "supernote_tool failed to parse %s (%s) — falling back to stub extraction",
+                "supernotelib failed to parse %s (%s) — falling back to stub extraction",
                 note_path,
                 exc,
             )
