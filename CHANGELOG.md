@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.5](https://github.com/xozai/supernote-to-obsidian/compare/v0.3.4...v0.3.5) (2026-05-21)
+
+
+### Documentation
+
+* update readme v0.2.0 ([#17](https://github.com/xozai/supernote-to-obsidian/issues/17)) ([5a0b3bc](https://github.com/xozai/supernote-to-obsidian/commit/5a0b3bc854c6d772a1f88b63de97ee937db24ceb))
+
 ## [0.3.4](https://github.com/xozai/supernote-to-obsidian/compare/v0.3.3...v0.3.4) (2026-05-21)
 
 
