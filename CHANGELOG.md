@@ -1,5 +1,40 @@
 # Changelog
 
+## [0.3.4](https://github.com/xozai/supernote-to-obsidian/compare/v0.3.3...v0.3.4) (2026-05-21)
+
+
+### Bug Fixes
+
+* five reliability fixes — attachment errors, failure stub routing, zero-page guard, config validation, missing credentials ([#15](https://github.com/xozai/supernote-to-obsidian/issues/15)) ([9544027](https://github.com/xozai/supernote-to-obsidian/commit/954402796c775c093e0e1821905fa5b73d65de7c))
+
+## [0.3.3](https://github.com/xozai/supernote-to-obsidian/compare/v0.3.2...v0.3.3) (2026-05-20)
+
+
+### Documentation
+
+* update README for v0.2.0 — new CLI flags, schedule command, modified status ([#13](https://github.com/xozai/supernote-to-obsidian/issues/13)) ([6bdda77](https://github.com/xozai/supernote-to-obsidian/commit/6bdda77bcc0f1ef79f75f330c9595a4b996a4d3a))
+
+## [0.3.2](https://github.com/xozai/supernote-to-obsidian/compare/v0.3.1...v0.3.2) (2026-05-20)
+
+
+### Documentation
+
+* update README for v0.2.0 — new CLI flags, schedule command, modified status ([#11](https://github.com/xozai/supernote-to-obsidian/issues/11)) ([c79e0c9](https://github.com/xozai/supernote-to-obsidian/commit/c79e0c92f8d10b72c19c3214247b06022b730f2a))
+
+## [0.3.1](https://github.com/xozai/supernote-to-obsidian/compare/v0.3.0...v0.3.1) (2026-04-28)
+
+
+### Documentation
+
+* update README for v0.2.0 — new CLI flags, schedule command, modified status ([#9](https://github.com/xozai/supernote-to-obsidian/issues/9)) ([f0d8781](https://github.com/xozai/supernote-to-obsidian/commit/f0d87815b85b9f056eaff51605de21a8981cb93e))
+
+## [0.3.0](https://github.com/xozai/supernote-to-obsidian/compare/v0.2.0...v0.3.0) (2026-04-28)
+
+
+### Features
+
+* Sprint 2+3 — CLI filters, schedule command, run summary, modified status ([#7](https://github.com/xozai/supernote-to-obsidian/issues/7)) ([9e61e65](https://github.com/xozai/supernote-to-obsidian/commit/9e61e654b18b0707ea2c2501e8d1878a826c9e32))
+
 ## [0.2.0](https://github.com/xozai/supernote-to-obsidian/compare/v0.1.0...v0.2.0) (2026-04-28)
 
 
