@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.4](https://github.com/xozai/supernote-to-obsidian/compare/v0.3.3...v0.3.4) (2026-05-21)
+
+
+### Bug Fixes
+
+* five reliability fixes — attachment errors, failure stub routing, zero-page guard, config validation, missing credentials ([#15](https://github.com/xozai/supernote-to-obsidian/issues/15)) ([9544027](https://github.com/xozai/supernote-to-obsidian/commit/954402796c775c093e0e1821905fa5b73d65de7c))
+
 ## [0.3.3](https://github.com/xozai/supernote-to-obsidian/compare/v0.3.2...v0.3.3) (2026-05-20)
 
 
