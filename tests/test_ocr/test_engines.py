@@ -127,3 +127,30 @@ class TestGoogleVisionEngine:
         with patch.dict("sys.modules", {"google.cloud.vision": mock_vision}):
             with pytest.raises(RuntimeError, match="API quota exceeded"):
                 engine.run(blank_page)
+
+    def test_get_client_raises_for_missing_credentials_file(self) -> None:
+        from supernote_sync.ocr.google_vision_engine import GoogleVisionEngine
+        engine = GoogleVisionEngine(credentials_path="/nonexistent/creds.json")
+        with pytest.raises(ValueError) as exc_info:
+            engine._get_client()
+        assert "credentials file not found" in str(exc_info.value).lower()
+
+    def test_get_client_does_not_raise_when_credentials_path_is_empty(self) -> None:
+        """Empty path uses Application Default Credentials — skip the file check."""
+        import sys
+        from unittest.mock import MagicMock, patch
+        from supernote_sync.ocr.google_vision_engine import GoogleVisionEngine
+        engine = GoogleVisionEngine(credentials_path="")
+        mock_vision = MagicMock()
+        mocks = {
+            "google": MagicMock(), "google.cloud": MagicMock(),
+            "google.cloud.vision": mock_vision,
+            "google.oauth2": MagicMock(), "google.oauth2.service_account": MagicMock(),
+        }
+        with patch.dict(sys.modules, mocks):
+            try:
+                engine._get_client()
+            except ValueError as e:
+                pytest.fail(f"Unexpected ValueError: {e}")
+            except Exception:
+                pass  # mock-induced errors are acceptable

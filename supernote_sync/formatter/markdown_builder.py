@@ -81,14 +81,16 @@ class FailureDocument:
 
     Attributes:
         source_path: Path to the original ``.note`` file that failed.
+        notes_dir: Vault directory where the failure stub is written.
     """
 
     source_path: Path
+    notes_dir: Path
 
     @property
     def output_path(self) -> Path:
-        """Return the output path with a ``_FAILED`` suffix."""
-        return self.source_path.with_name(f"{self.source_path.stem}_FAILED.md")
+        """Return the output path with a ``_FAILED`` suffix inside the vault."""
+        return self.notes_dir / f"{self.source_path.stem}_FAILED.md"
 
     @property
     def attachments(self) -> list[tuple[str, bytes]]:

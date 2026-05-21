@@ -227,11 +227,18 @@ class TestFailureDocument:
     """Tests for FailureDocument."""
 
     @pytest.fixture()
-    def failure_doc(self, tmp_path: Path) -> FailureDocument:
+    def notes_dir(self, tmp_path: Path) -> Path:
+        """Return the vault notes directory."""
+        d = tmp_path / "vault" / "Supernote"
+        d.mkdir(parents=True)
+        return d
+
+    @pytest.fixture()
+    def failure_doc(self, tmp_path: Path, notes_dir: Path) -> FailureDocument:
         """Return a FailureDocument."""
         source = tmp_path / "bad_note.note"
         source.write_bytes(b"\x00")
-        return FailureDocument(source_path=source)
+        return FailureDocument(source_path=source, notes_dir=notes_dir)
 
     def test_render_contains_ocr_failed(self, failure_doc: FailureDocument) -> None:
         """render() contains OCR_FAILED marker."""
@@ -240,6 +247,12 @@ class TestFailureDocument:
     def test_output_path_contains_failed(self, failure_doc: FailureDocument) -> None:
         """output_path contains 'FAILED'."""
         assert "FAILED" in failure_doc.output_path.name
+
+    def test_output_path_is_inside_notes_dir(
+        self, failure_doc: FailureDocument, notes_dir: Path
+    ) -> None:
+        """output_path parent is the vault notes directory."""
+        assert failure_doc.output_path.parent == notes_dir
 
     def test_attachments_is_empty(self, failure_doc: FailureDocument) -> None:
         """FailureDocument has an empty attachments list."""

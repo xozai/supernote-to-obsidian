@@ -83,6 +83,10 @@ class Pipeline:
 
         try:
             pages = self.parser.extract_pages(note_path)
+            if not pages:
+                logger.warning("No pages extracted from %s — writing failure stub", note_path.name)
+                self._write_failure_stub(note_path)
+                return False
             ocr_results = [self.ocr.run(page) for page in pages]
 
             # Filter blank pages
@@ -136,7 +140,7 @@ class Pipeline:
             note_path: Path to the file that failed processing.
         """
         try:
-            failure_doc = FailureDocument(source_path=note_path)
+            failure_doc = FailureDocument(source_path=note_path, notes_dir=self.builder.notes_dir)
             self.writer.write(failure_doc)
             logger.info("Wrote failure stub for %s", note_path.name)
         except Exception as stub_exc:  # noqa: BLE001
