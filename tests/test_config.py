@@ -69,17 +69,70 @@ class TestLoadConfig:
         assert "obsidian" in result
         assert "logging" in result
 
-    def test_empty_yaml_returns_empty_dict(self, tmp_path: Path) -> None:
-        """An empty YAML file returns an empty dict."""
+    def test_empty_yaml_raises_for_missing_required_keys(self, tmp_path: Path) -> None:
+        """An empty YAML file raises ValueError for missing required keys."""
         p = tmp_path / "empty.yaml"
         p.write_text("", encoding="utf-8")
-        result = load_config(p)
-        assert result == {}
+        with pytest.raises(ValueError, match="vault_path"):
+            load_config(p)
 
     def test_list_values_preserved(self, tmp_path: Path) -> None:
         """List values (e.g. default_tags) are preserved."""
-        cfg = {"obsidian": {"frontmatter": {"default_tags": ["a", "b"]}}}
+        cfg = {
+            "obsidian": {
+                "vault_path": "/vault",
+                "frontmatter": {"default_tags": ["a", "b"]},
+            },
+            "supernote": {"sync_folder": "/sync"},
+        }
         p = tmp_path / "cfg.yaml"
         p.write_text(yaml.dump(cfg), encoding="utf-8")
         result = load_config(p)
         assert result["obsidian"]["frontmatter"]["default_tags"] == ["a", "b"]
+
+
+def test_raises_value_error_for_missing_vault_path(tmp_path: Path) -> None:
+    p = tmp_path / "c.yaml"
+    p.write_text(yaml.dump({"supernote": {"sync_folder": "/sync"}, "obsidian": {}}))
+    with pytest.raises(ValueError, match="vault_path"):
+        load_config(p)
+
+
+def test_raises_value_error_for_missing_sync_folder(tmp_path: Path) -> None:
+    p = tmp_path / "c.yaml"
+    p.write_text(yaml.dump({"supernote": {}, "obsidian": {"vault_path": "/vault"}}))
+    with pytest.raises(ValueError, match="sync_folder"):
+        load_config(p)
+
+
+def test_raises_value_error_for_invalid_render_dpi(tmp_path: Path) -> None:
+    p = tmp_path / "c.yaml"
+    p.write_text(yaml.dump({
+        "obsidian": {"vault_path": "/vault"},
+        "supernote": {"sync_folder": "/sync"},
+        "processing": {"render_dpi": "fast"},
+    }))
+    with pytest.raises(ValueError, match="render_dpi"):
+        load_config(p)
+
+
+def test_raises_value_error_for_unknown_ocr_engine(tmp_path: Path) -> None:
+    p = tmp_path / "c.yaml"
+    p.write_text(yaml.dump({
+        "obsidian": {"vault_path": "/vault"},
+        "supernote": {"sync_folder": "/sync"},
+        "ocr": {"engine": "magic"},
+    }))
+    with pytest.raises(ValueError, match="ocr.engine"):
+        load_config(p)
+
+
+def test_valid_config_does_not_raise(tmp_path: Path) -> None:
+    p = tmp_path / "c.yaml"
+    p.write_text(yaml.dump({
+        "obsidian": {"vault_path": "/vault"},
+        "supernote": {"sync_folder": "/sync"},
+        "ocr": {"engine": "tesseract"},
+        "processing": {"render_dpi": 200},
+    }))
+    load_config(p)  # must not raise

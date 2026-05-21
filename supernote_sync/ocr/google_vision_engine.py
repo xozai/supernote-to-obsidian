@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import logging
+from pathlib import Path
 from statistics import mean
 
 from PIL import Image
@@ -35,6 +36,11 @@ class GoogleVisionEngine(BaseOcrEngine):
         Returns:
             A :class:`google.cloud.vision.ImageAnnotatorClient` instance.
         """
+        if self.credentials_path and not Path(self.credentials_path).exists():
+            raise ValueError(
+                f"Google Vision credentials file not found: {self.credentials_path!r}. "
+                "Set ocr.google_vision.credentials_path to a valid service-account JSON key file."
+            )
         if self._client is None:
             from google.cloud import vision  # type: ignore[import]
             from google.oauth2 import service_account  # type: ignore[import]

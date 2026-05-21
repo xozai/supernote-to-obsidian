@@ -50,6 +50,7 @@ class VaultWriter:
         """
         # Write attachments
         self.attachments_folder.mkdir(parents=True, exist_ok=True)
+        attachment_errors: list[str] = []
         for filename, data in document.attachments:
             dest = self.attachments_folder / filename
             try:
@@ -57,6 +58,11 @@ class VaultWriter:
                 logger.debug("Wrote attachment: %s", dest)
             except OSError as exc:
                 logger.error("Failed to write attachment %s: %s", dest, exc)
+                attachment_errors.append(filename)
+        if attachment_errors:
+            raise OSError(
+                f"Failed to write {len(attachment_errors)} attachment(s): {', '.join(attachment_errors)}"
+            )
 
         # Write markdown note
         output_path: Path = document.output_path

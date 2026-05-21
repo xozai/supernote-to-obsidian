@@ -134,3 +134,20 @@ class TestVaultWriter:
         with patch("subprocess.run", side_effect=subprocess.CalledProcessError(1, "git")):
             # Should not raise
             writer.write(doc)
+
+
+def test_write_raises_when_attachment_write_fails(cfg: dict, vault_path: Path) -> None:
+    """OSError during attachment write propagates; markdown is never written."""
+    from unittest.mock import patch
+    writer = VaultWriter(cfg)
+    doc = _make_document(vault_path, has_attachments=True)
+    doc.output_path.parent.mkdir(parents=True, exist_ok=True)
+    original_write_bytes = Path.write_bytes
+    def patched_write_bytes(self, data):
+        if self.suffix == ".png":
+            raise OSError("disk full")
+        return original_write_bytes(self, data)
+    with patch.object(Path, "write_bytes", patched_write_bytes):
+        with pytest.raises(OSError, match="attachment"):
+            writer.write(doc)
+    assert not doc.output_path.exists()

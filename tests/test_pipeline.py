@@ -124,11 +124,31 @@ class TestPipeline:
             result = pipeline.process_file(note_file)
 
         assert result is False
-        # Verify a FAILED stub was written somewhere under vault or note location
-        failed_files = list(note_file.parent.rglob("*FAILED*.md")) + list(
-            vault_path.rglob("*FAILED*.md")
-        )
-        assert len(failed_files) >= 1
+        failed_files = list((vault_path / "Notes").glob("*FAILED*.md"))
+        assert len(failed_files) == 1
+
+
+def test_process_file_returns_false_for_zero_pages(
+    cfg: dict, note_file: Path, vault_path: Path
+) -> None:
+    """extract_pages returning [] writes a failure stub and skips mark_processed."""
+    from supernote_sync.pipeline import Pipeline
+    from unittest.mock import MagicMock, patch
+    cfg = dict(cfg)
+    cfg["processing"] = {**cfg["processing"], "deduplicate": True}
+    mock_dedup = MagicMock()
+    mock_dedup.already_processed.return_value = False
+    with (
+        patch("supernote_sync.pipeline.NoteParser.extract_pages", return_value=[]),
+        patch("supernote_sync.utils.dedup.DedupCache", return_value=mock_dedup),
+    ):
+        pipeline = Pipeline(cfg)
+        pipeline._dedup = mock_dedup
+        result = pipeline.process_file(note_file)
+    assert result is False
+    failed_files = list((vault_path / "Notes").glob("*FAILED*.md"))
+    assert len(failed_files) >= 1
+    mock_dedup.mark_processed.assert_not_called()
 
 
 def test_is_blank_page_returns_true_for_white_image(tmp_path: Path) -> None:
